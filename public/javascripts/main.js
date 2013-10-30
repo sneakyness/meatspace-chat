@@ -1,71 +1,98 @@
-define(['jquery', './base/gumhelper', './base/videoShooter'],
-  function($, gumHelper, VideoShooter) {
+define(['jquery', 'linkify', './base/gumhelper', './base/videoShooter', 'fingerprint', 'md5'],
+  function ($, linkify, gumHelper, VideoShooter, Fingerprint, md5) {
   'use strict';
 
   var html = $('html');
   var body = $('body');
-  var addChat = $('#add-chat-form');
+  var addChatForm = $('#add-chat-form');
+  var addChatBlocker = $('#add-chat-blocker');
+  var addChat = $('#add-chat');
+  var picField = $('#picture');
   var chatList = $('.chats ul');
   var footer = $('#footer');
+  var muteBtn = $('.mute');
+  var userId = $('#userid');
+  var fp = $('#fp');
   var posting = false;
   var videoShooter;
+  var canSend = true;
+  var fingerprint = new Fingerprint({ canvas: true }).get();
+  var mutedArr = JSON.parse(localStorage.getItem('muted')) || [];
   var socket = io.connect(location.protocol + '//' + location.hostname +
     (location.port ? ':' + location.port : ''));
 
-  var CHAT_LIMIT = 35;
+  var CHAT_LIMIT = 25;
 
-  var escapeHtml = function (text) {
-    text = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+  $.get('/ip', function (data) {
+    fp.val(fingerprint);
+    userId.val(md5(fingerprint + data.ip));
+  });
 
-    var txtArray = text.split(/\s/);
-    var newTxt = [];
+  emojify.setConfig({
+    emojify_tag_type: 'div',
+    emoticons_enabled: true,
+    people_enabled: true,
+    nature_enabled: true,
+    objects_enabled: true,
+    places_enabled: true,
+    symbols_enabled: true
+  });
 
-    for (var i = 0; i < txtArray.length; i ++) {
-      if (txtArray[i].match(/^(http)+/)) {
-        newTxt.push('<a href="' + txtArray[i] + '" target="_blank">' + txtArray[i] + '</a>');
-      } else if (txtArray[i].match(/^(www)+/)) {
-        newTxt.push('<a href="http://' + txtArray[i] + '" target="_blank">' + txtArray[i] + '</a>');
-      } else if (txtArray[i].match(/(^|[^@\w])@(\w{1,15})/)) {
-        newTxt.push('<a href="https://twitter.com/' + txtArray[i].replace(/[\W]/g,'') + '" target="_blank">' + txtArray[i] + '</a>');
-      } else {
-        newTxt.push(txtArray[i]);
-      }
-    }
-
-    return newTxt.join(' ');
+  var isMuted = function(fingerprint) {
+    return mutedArr.indexOf(fingerprint) !== -1;
   };
 
   var renderChat = function (c) {
-    var img = new Image();
-    img.onload = function() {  
-      if (body.find('li[data-key="' + c.chat.key + '"]').length === 0) {
-        var li = $('<li data-action="chat-message" data-key="' + c.chat.key +
-          '"><img src="' + escapeHtml(c.chat.value.media) + '"><p>' +
-          escapeHtml(c.chat.value.message) + '</p></li>');
+    var renderFP = c.chat.value.fingerprint;
 
-        var size = body.find('#add-chat')[0].getBoundingClientRect().bottom
-        var last = body.find('.chats > ul')[0].lastChild
-        var bottom = last ? last.getBoundingClientRect().bottom : 0
+    if (!isMuted(renderFP)) {
+      var img = new Image();
+      img.onload = function () {
+        // Don't want duplicates and don't want muted messages
+        if (body.find('li[data-key="' + c.chat.key + '"]').length === 0 &&
+            !isMuted(renderFP)) {
 
-        var follow = bottom < size + 50
+          var li = document.createElement('li');
+          li.dataset.action = 'chat-message';
+          li.dataset.key = c.chat.key;
+          li.dataset.fingerprint = renderFP;
+          li.appendChild(img);
 
-        chatList.append(li)
-
-        // if scrolled to bottom of window then scroll the new thing into view
-        // otherwise, you are reading the history... allow user to scroll up.
-        // TODO: play an annoying noise if user is not on this tab?
-        if(follow) {
-          if (body.find('.chats.list > ul > li').length > CHAT_LIMIT) {
-            body.find('.chats.list > ul > li')[0].remove();
+          // This is likely your own fingerprint so you don't mute yourself. Unless you're weird.
+          if (userId.val() !== renderFP) {
+            var btn = document.createElement('button');
+            btn.textContent = 'mute';
+            btn.className = 'mute';
+            li.appendChild(btn);
           }
-          li[0].scrollIntoView()
+
+          var message = document.createElement('p');
+          message.textContent = c.chat.value.message;
+          message.innerHTML = linkify(message.innerHTML);
+          li.appendChild(message);
+
+          var size = addChat[0].getBoundingClientRect().bottom;
+          var last = chatList[0].lastChild;
+          var bottom = last ? last.getBoundingClientRect().bottom : 0;
+          var follow = bottom < size + 50;
+
+          chatList.append(li);
+          emojify.run(li);
+
+          // if scrolled to bottom of window then scroll the new thing into view
+          // otherwise, you are reading the history... allow user to scroll up.
+          if(follow) {
+            var children = chatList.children();
+            if (children.length > CHAT_LIMIT) {
+              children.first().remove();
+            }
+
+            li.scrollIntoView();
+          }
         }
-      }
+      };
+      img.src = c.chat.value.media;
     }
-    img.src = escapeHtml(c.chat.value.media);
   };
 
   socket.on('connect', function () {
@@ -75,12 +102,11 @@ define(['jquery', './base/gumhelper', './base/videoShooter'],
   });
 
   $.get('/get/chats', function (data) {
-    for (var i = 0; i < data.chats.chats.length; i ++) {
-      var chat = {
-        chat: data.chats.chats[i]
-      };
-      renderChat(chat);
-    }
+    data.chats.chats.sort(function (a, b) {
+      return a.value.created - b.value.created;
+    }).forEach(function (chat) {
+      renderChat({chat: chat});
+    });
   });
 
   var getScreenshot = function (callback, numFrames, interval) {
@@ -93,39 +119,81 @@ define(['jquery', './base/gumhelper', './base/videoShooter'],
 
   if (navigator.getMedia) {
     gumHelper.startVideoStreaming(function errorCb() {
+      addChatForm.hide();
+      footer.hide();
     }, function successCallback(stream, videoElement, width, height) {
       videoElement.width = width / 5;
       videoElement.height = height / 5;
-      footer.append(videoElement);
+      footer.prepend(videoElement);
       videoElement.play();
+
+      // set offset to video width if it isn't already set
+      if ( addChatForm.css('left') === '0px' ) {
+        addChatForm.css('left', width / 5);
+      }
+
       videoShooter = new VideoShooter(videoElement);
-      addChat.click();
+      addChatForm.click();
     });
   } else {
-    addChat.click();
+    addChatForm.hide();
+    footer.hide();
   }
 
-  addChat.on('submit', function (ev) {
+  body.on('click', '.mute', function (ev) {
+    var self = $(this);
+    var fp = self.parent('[data-fingerprint]').data('fingerprint');
+
+    if (!isMuted(fp)) {
+      mutedArr.push(fp);
+      localStorage.setItem('muted', JSON.stringify(mutedArr));
+      self.text('muted!');
+    }
+  });
+
+  // allow multiple lines of input with carriage return mapped to shift+enter
+  addChatForm.on('keydown', function (ev) {
+    // Enter was pressed without shift key
+    if (ev.keyCode === 13 && !ev.shiftKey) {
+      ev.preventDefault();
+      addChatForm.submit();
+    }
+  }).on('submit', function (ev) {
     ev.preventDefault();
 
     var self = $(ev.target);
-    var blocker = self.find('#add-chat-blocker');
-    var addChat = self.find('#add-chat');
+
 
     if (!posting) {
-      blocker.removeClass('hidden');
-      posting = true;
+      if (!canSend) {
+        alert('please wait a wee bit...');
+      }
 
-      getScreenshot(function (pictureData) {
-        var picField = self.find('#picture').val(pictureData);
+      if (canSend) {
+        canSend = false;
+        addChatBlocker.removeClass('hidden');
+        posting = true;
 
-        $.post('/add/chat', self.serialize(), function () {
-          picField.val('');
-          addChat.val('');
-          blocker.addClass('hidden');
-          posting = false;
-        });
-      }, 10, 0.2);
+        setTimeout(function () {
+          canSend = true;
+        }, 5000);
+
+        getScreenshot(function (pictureData) {
+          picField.val(pictureData);
+
+          $.post('/add/chat', self.serialize(), function () {
+
+          }).error(function (data) {
+            alert(data.responseJSON.error);
+          }).always(function (data) {
+            picField.val('');
+            addChat.val('');
+            posting = false;
+            addChatBlocker.addClass('hidden');
+            body.find('> img').remove();
+          });
+        }, 10, 0.2);
+      }
     }
   });
 });

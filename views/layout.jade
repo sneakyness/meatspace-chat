@@ -1,7 +1,7 @@
 !!! 5
 html
   head
-    title publico: messages self destruct in 10 minutes
+    title Meatspace chat: your 2 seconds of fame.
     meta(content='width=device-width, height=device-height, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0', name='viewport')
     meta(content='yes', name='apple-mobile-web-app-capable')
     meta(content='chrome=1', http-equiv='X-UA-Compatible')
@@ -13,15 +13,20 @@ html
   body(data-authenticated='#{!!session.email}')
     #wrapper
       ul.header
-        li.title Meatspace chat
-        li.github
-          a(href='http://github.com/meatspaces/meatspace-chat', target='_blank') Github
-
-      .chats.list
+        li
+          a#logo(href='http://github.com/meatspaces/meatspace-chat', target='_blank', title='Github') Github
+        li
+          span created by
+          a(href='http://twitter.com/ednapiranha', target='_blank') ednapiranha
+          span and
+          a(href='http://twitter.com/supersole', target='_blank') supersole
+      .chats
         ul
         .end
-        block content
     #footer
+      block content
 
     script(src='/socket.io/socket.io.js')
     script(src='/javascripts/require.js', data-main='/javascripts/config')
+    script(src='/javascripts/lib/emojify.js', type='text/javascript')
+    link(rel='stylesheet', href='/stylesheets/emojify.css')
