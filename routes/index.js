@@ -93,6 +93,8 @@ module.exports = function (app, io) {
         addChat(data.message, data.picture, data.fingerprint, function (err) {
           if (err) {
             console.log('error posting ', err.toString());
+          } else {
+            socket.emit('success');
           }
         });
       } else {
