@@ -1,18 +1,19 @@
 requirejs.config({
   deps: ['main'],
   paths: {
-    'jquery': 'lib/jquery',
-    'Animated_GIF': 'lib/Animated_GIF/Animated_GIF',
-    'GifWriter': 'lib/Animated_GIF/omggif',
-    'fingerprint': 'lib/fingerprint',
-    'linkify': 'linkify',
-    'md5': 'lib/md5'
+    'jquery': 'lib/jquery/jquery',
+    'Animated_GIF': 'lib/animated-gif/dist/Animated_GIF.min',
+    'fingerprint': 'lib/fingerprint/fingerprint',
+    'md5': 'lib/js-md5/js/md5',
+    'waypoints': 'lib/jquery-waypoints/waypoints',
+    'moment': 'lib/momentjs/moment',
+    'favico': 'lib/favico.js/favico',
+    'gumhelper': 'lib/gumhelper/gumhelper'
   },
   shim: {
     'jquery': {
       exports: 'jQuery'
     },
-    'Animated_GIF': ['GifWriter'],
     'fingerprint': {
       exports: 'Fingerprint'
     }

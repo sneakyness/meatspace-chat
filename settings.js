@@ -1,7 +1,7 @@
 // Module dependencies.
 module.exports = function(app, configurations, express) {
-  var clientSessions = require('client-sessions');
   var nconf = require('nconf');
+  var i18n = require('i18next');
   var maxAge = 24 * 60 * 60 * 1000 * 28;
   var nativeClients = require('./clients.json');
   var csrf = express.csrf();
@@ -9,34 +9,44 @@ module.exports = function(app, configurations, express) {
   nconf.argv().env().file({ file: 'local.json' });
 
   // Configuration
+  var checkApiKey = function (req, res, next) {
+    if (req.body.apiKey && nativeClients.indexOf(req.body.apiKey) > -1) {
+      req.isApiUser = true;
+    }
+    next();
+  };
 
   var clientBypassCSRF = function (req, res, next) {
-    if (req.body.apiKey && nativeClients.indexOf(req.body.apiKey) > -1) {
+    if (req.isApiUser) {
       next();
     } else {
       csrf(req, res, next);
     }
   };
 
+  i18n.init({
+    lng: nconf.get('locale'), // undefined detects user browser settings
+    supportedLngs: ['en', 'fr', 'es', 'ru'],
+    fallbackLng: 'en',
+    useCookie: false,
+    resGetPath: 'locales/__lng__.json'
+  });
+  i18n.registerAppHelper(app);
+
   app.configure(function () {
     app.set('views', __dirname + '/views');
     app.set('view engine', 'jade');
     app.set('view options', { layout: false });
-    app.use(express.bodyParser());
+    app.use(express.json());
+    app.use(express.urlencoded());
     app.use(express.methodOverride());
     if (!process.env.NODE_ENV) {
       app.use(express.logger('dev'));
     }
     app.use(express.static(__dirname + '/public'));
-    app.use(clientSessions({
-      cookieName: nconf.get('session_cookie'),
-      secret: nconf.get('session_secret'),
-      duration: maxAge, // 4 weeks
-      cookie: {
-        httpOnly: true,
-        maxAge: maxAge
-      }
-    }));
+    app.use(express.cookieParser());
+    app.use(express.session({ secret: nconf.get('session_secret') }));
+    app.use(checkApiKey);
     app.use(clientBypassCSRF);
     app.use(function (req, res, next) {
       res.locals.session = req.session;
@@ -45,10 +55,18 @@ module.exports = function(app, configurations, express) {
       } else {
         res.locals.csrf = false;
       }
+      if (!process.env.NODE_ENV) {
+        res.locals.debug = true;
+      } else {
+        res.locals.debug = false;
+      }
       res.locals.analytics = nconf.get('analytics');
+      res.locals.appId = nconf.get('appId');
       res.locals.analyticsHost = nconf.get('analyticsHost');
       next();
     });
+    app.use(i18n.handle);
+    app.enable('trust proxy');
     app.locals.pretty = true;
     app.use(app.router);
     app.use(function (req, res, next) {

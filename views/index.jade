@@ -1,14 +1,19 @@
 extend layout
 
 block content
-  form(method='post', id='add-chat-form')
-    input(type='hidden', name='picture', id='picture')
+  form(method='post', id='composer-form')
     .message-content
-      textarea(rows:1, name='message', id='add-chat', class='input', autocomplete='off', placeholder='Send a public message', maxlength='150')
+      input(name='message', id='composer-message', class='input', maxlength='250', autocomplete='off', placeholder=t('messagePrompt'))
       input(type='hidden', name='_csrf', value='#{csrf}')
-      input(type='hidden', name='fingerprint', id='fp')
-      input(type='hidden', name='userid', id='userid')
-      #add-chat-blocker.hidden
-        span Sending, please wait!
-    .footer
+      #composer-blocker.hidden
+        span= t('pleaseWait')
+  #counter 250
 
+block terms
+  #terms
+    p= t('termsAndConditions')
+    p
+      a(href='/terms')= t('termsLink')
+    p
+      a(href='javascript:;', class='agree', id='tnc-accept')= t('iAccept')
+      a(href='http://www.nyan.cat', class='agree')= t('iDoNotAccept')
